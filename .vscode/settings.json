@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.linkedProjects": [
+    // Leetcode examples
+    "./leetcode/001-two_sum/Cargo.toml"
+  ]
+}
