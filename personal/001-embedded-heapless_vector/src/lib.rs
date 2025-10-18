@@ -56,24 +56,6 @@ impl<T, const N: usize> ArrayVec<T, N> {
         Some(unsafe { self.values[self.len].assume_init_read() })
     }
 
-    /// Return array of init and uninit elements in ArrayVec.
-    ///
-    /// ASIDE: I don't actually need to add `'a` due to Lifetime Ellision
-    /// rules. I left it just to remind myself how far I've come to
-    /// perfectly understand lifetimes now.
-    ///
-    /// Use `into_arr` as an associated function.
-    // pub fn into_arr<'a>(arr_vec: &'a ArrayVec<T, N>)
-    // -> [Option<&'a T>; N]
-    // {
-    //     let mut arr: [Option<&T>; N] = [const { None }; N];
-    //     for i in 0..N {
-    //         let el = arr_vec.get(i);
-    //         arr[i] = el;
-    //     }
-    //     arr
-    // }
-
     /// Returns the current length.
     pub fn len(&self) -> usize {
         self.len
@@ -87,20 +69,20 @@ impl<T, const N: usize> ArrayVec<T, N> {
         unsafe { core::slice::from_raw_parts(self.values.as_ptr() as *const T, self.len) }
     }
 
-    // /// Returns a mutable slice over init elements.
-    // pub fn as_mut_slice(&mut self) -> &mut [T] {
-    //     unsafe { core::slice::from_raw_parts_mut(self.values.as_mut_ptr() as *mut T, self.len) }
-    // }
+    /// Returns a mutable slice over init elements.
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        unsafe { core::slice::from_raw_parts_mut(self.values.as_mut_ptr() as *mut T, self.len) }
+    }
 
-    // /// Use slice iterator for immutable iteration
-    // pub fn iter(&self) -> core::slice::Iter<'_, T> {
-    //     self.as_slice().iter()
-    // }
+    /// Use slice iterator for immutable iteration
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        self.as_slice().iter()
+    }
 
-    // /// Use slice iterator for mutable iteration
-    // pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
-    //     self.as_mut_slice().iter_mut()
-    // }
+    /// Use slice iterator for mutable iteration
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        self.as_mut_slice().iter_mut()
+    }
 }
 
 // Implement Drop trait to safely deallocate init elements.
@@ -113,5 +95,90 @@ impl<T, const N: usize> Drop for ArrayVec<T, N> {
                 self.values[i].assume_init_drop();
             }
         }
+    }
+}
+
+/*
+
+// Build out iterator type for ArrayVec as ArrayVecIntoIter<T, N>
+// Consuming iterator (by-value): Moves out owned T.
+// But will provide iterators for fundamental types: & and &mut
+#[derive(Debug)]
+struct ArrayVecIntoIter<T, const N: usize> {
+    values: [MaybeUninit<T>; N],
+    len: usize,
+    index: usize,
+}
+
+// Implement Iterator trait on ArrayVecIntoIter making it an iterator.
+impl<T, const N: usize> Iterator for ArrayVecIntoIter<T, N> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.len {
+            return None;
+        }
+        let i = self.index;
+        self.index += 1;
+        // SAFETY: i < len, so slot is init
+        Some(unsafe { self.values[i].assume_init_read() })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = self.len.saturating_sub(self.index);
+        (remaining, Some(remaining))
+    }
+}
+
+// Implement Drop trait to safely deallocate initialized elements
+// from ArrayVecIntoIter<T, N> MaybeUninit<T> values
+impl<T, const N: usize> Drop for ArrayVecIntoIter<T, N> {
+    fn drop(&mut self) {
+        // Drop remaining init elements (from index to len)
+        // SAFETY: Invariant holds for those slots.
+        for i in self.index..self.len {
+            unsafe {
+                self.values[i].assume_init_drop();
+            }
+        }
+        // Uninit slots auto-drop as MaybeUninit: meaning as "garbage"
+        // bytes they are overwritten by the next write.
+    }
+}
+
+// Implement IntoIterator for ArrayVecIntoIter; returns an iterator.
+impl<T, const N: usize> IntoIterator for ArrayVec<T, N> {
+    type Item = T;
+    type IntoIter = ArrayVecIntoIter<T, N>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ArrayVecIntoIter {
+            values: self.values,
+            len: self.len,
+            index: 0,
+        }
+    }
+}
+
+*/
+
+// Implement IntoIterator for fundamental types of ArrayVec: & and &mut.
+// By reference: yields &T
+impl<'a, T, const N: usize> IntoIterator for &'a ArrayVec<T, N> {
+    type Item = &'a T;
+    type IntoIter = core::slice::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_slice().iter()
+    }
+}
+
+// By mutable reference: yields &mut T
+impl<'a, T, const N: usize> IntoIterator for &'a mut ArrayVec<T, N> {
+    type Item = &'a mut T;
+    type IntoIter = core::slice::IterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.as_mut_slice().iter_mut()
     }
 }
