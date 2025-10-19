@@ -124,4 +124,81 @@ fn main() {
         Notice index incr caused by calling `next()` on ArrayVecIntoIter. */
         std::println!("{:?}", arr_vec2.as_slice());
     }
+
+    {
+        // D:
+        // Test FromIterator implementation with iterators on ArrayVec.
+
+        // Using `collect`:
+        let arr_vec = (-10..10).collect::<ArrayVec<i8, 15>>();
+        std::println!("---\n{:?}", arr_vec.as_slice());
+
+        // Using `from_iter`:
+        let arr_vec = ArrayVec::<_, 5>::from_iter(-3..5 as i8); /* Using
+        type inference for `T` in `ArrayVec<T, N>` helped by type cast
+        on iterator. */
+        std::println!("{:?}", arr_vec.as_slice());
+    }
+
+    {
+        // E:
+        // Test Extend implementation with iterators on ArrayVec.
+
+        /* Testing for two scenarios;
+
+        1. `arr_vec1` has more CAP (array "capacity" - N) than `arr_vec2`
+        has elements to fill it. Meaning, `arr_vec1` will retain spare CAP.
+
+        2. `arr_vec1` has less CAP (array "capacity" - N) than `arr_vec2`
+        has elements to fill it. Meaning, `arr_vec1` will max it's CAP
+        without extending all of `arr_vec2`s elements.
+        */
+
+        // Scenario 1:
+        type ArrayVecCap10<T> = ArrayVec<T, 10>;
+        type ArrayVecCap5<T> = ArrayVec<T, 5>;
+
+        let mut arr_vec1: ArrayVecCap10<u8> = ArrayVec::new();
+        let mut count;
+        for i in 0..3 {
+            // Add elements to `arr_vec1`.
+            count = 1 + i as u8;
+            arr_vec1.try_push(count).unwrap();
+        }
+
+        let mut arr_vec2: ArrayVecCap5<u8> = ArrayVec::new();
+        for i in 0..2 {
+            // Add elements to `arr_vec2`.
+            count = 1 + i as u8;
+            arr_vec2.try_push(count).unwrap();
+        }
+
+        arr_vec1.extend(arr_vec2);
+
+        let mut empty_arr_vec: ArrayVecCap10<Option<u8>> = ArrayVec::new();
+        std::println!("{:?}", arr_vec1.show_init(&mut empty_arr_vec));
+        drop(empty_arr_vec); /* Choosing to explicity drop (or free, or
+        deallocate) the stack memory consumed by `empty_arr_vec` here
+        as it's no longer in use. */
+
+        // Scenario 2:
+        let mut arr_vec1: ArrayVecCap5<i8> = ArrayVec::new();
+        for i in -2..0 {
+            arr_vec1.try_push(i).unwrap();
+        }
+
+        let mut arr_vec2: ArrayVecCap10<i8> = ArrayVec::new();
+        for i in -5..0 {
+            arr_vec2.try_push(i).unwrap();
+        }
+
+        arr_vec1.extend(arr_vec2);
+
+        let mut empty_arr_vec: ArrayVecCap5<Option<i8>> = ArrayVec::new();
+        std::println!("{:?}", arr_vec1.show_init(&mut empty_arr_vec));
+        /* Don't need to explicity drop `empty_arr_vec` here as before
+        because this is the end of the scope, and the Rust Compiler (rustc)
+        will call the drop method in ArrayVec's destructor `Drop`
+        to drop `empty_arr_vec` implicity. */
+    }
 }

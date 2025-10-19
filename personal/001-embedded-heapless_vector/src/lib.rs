@@ -86,6 +86,26 @@ impl<T, const N: usize> ArrayVec<T, N> {
     }
 }
 
+impl<T, const N: usize> ArrayVec<T, N>
+where
+    T: Copy,
+{
+    pub fn show_init<'a>(&self, other: &'a mut ArrayVec<Option<T>, N>) -> &'a [Option<T>] {
+        let mut count = 0;
+
+        for item in self {
+            let _ = other.try_push(Some(*item)); // deref `T` to copy primitive value.
+            count += 1;
+        }
+
+        while count < N {
+            let _ = other.try_push(None);
+            count += 1;
+        }
+        other.as_slice()
+    }
+}
+
 // Implement Drop trait to safely deallocate init elements.
 impl<T, const N: usize> Drop for ArrayVec<T, N> {
     fn drop(&mut self) {
@@ -159,6 +179,7 @@ impl<T, const N: usize> IntoIterator for ArrayVec<T, N> {
         // SAFETY: Wrap in ManuallyDrop to prevent original drop from running.
         // This transfers control to the iterator's Drop.
         let this = ManuallyDrop::new(self);
+
         // SAFETY: Read fields out (valid as long as we don't access `this` after).
         // ptr::read performs bitwise copy without calling Drop on read memory
         let values = unsafe { ptr::read(&this.values) };
@@ -190,5 +211,41 @@ impl<'a, T, const N: usize> IntoIterator for &'a mut ArrayVec<T, N> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.as_mut_slice().iter_mut()
+    }
+}
+
+// Extending functionality: Implementing FromIterator.
+impl<T, const N: usize> FromIterator<T> for ArrayVec<T, N> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut arr_vec = Self::new();
+        let iter = iter.into_iter();
+
+        // Optimize: If hinted size > N, take only N to skip excess early.
+        let (lower, _) = iter.size_hint();
+        if lower > N {
+            for item in iter.take(N) {
+                let _ = arr_vec.try_push(item); // Won't fail as len < N.
+            }
+            return arr_vec;
+        }
+
+        // General case: Push until full (truncates excess)
+        for item in iter {
+            let _ = arr_vec.try_push(item); // Err(item) dropped if full.
+        }
+        arr_vec
+    }
+}
+
+// Implement Extend for appending (up to "both" iter and ArrayVec capacity)
+impl<T, const N: usize> Extend<T> for ArrayVec<T, N> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        for item in iter {
+            // Stop iterating when iter is finished.
+            if let Err(_) = self.try_push(item) {
+                // break if self is full
+                break;
+            }
+        }
     }
 }
