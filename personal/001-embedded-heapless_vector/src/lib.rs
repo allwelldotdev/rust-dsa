@@ -1,4 +1,5 @@
-use core::mem::MaybeUninit;
+use core::mem::{ManuallyDrop, MaybeUninit};
+use core::ptr;
 
 #[derive(Debug)]
 pub struct ArrayVec<T, const N: usize> {
@@ -98,13 +99,11 @@ impl<T, const N: usize> Drop for ArrayVec<T, N> {
     }
 }
 
-/*
-
 // Build out iterator type for ArrayVec as ArrayVecIntoIter<T, N>
 // Consuming iterator (by-value): Moves out owned T.
 // But will provide iterators for fundamental types: & and &mut
 #[derive(Debug)]
-struct ArrayVecIntoIter<T, const N: usize> {
+pub struct ArrayVecIntoIter<T, const N: usize> {
     values: [MaybeUninit<T>; N],
     len: usize,
     index: usize,
@@ -135,6 +134,11 @@ impl<T, const N: usize> Iterator for ArrayVecIntoIter<T, N> {
 impl<T, const N: usize> Drop for ArrayVecIntoIter<T, N> {
     fn drop(&mut self) {
         // Drop remaining init elements (from index to len)
+
+        // SAFETY: Just for extra safety:
+        #[cfg(debug_assertions)]
+        debug_assert!(self.index <= self.len);
+
         // SAFETY: Invariant holds for those slots.
         for i in self.index..self.len {
             unsafe {
@@ -152,15 +156,21 @@ impl<T, const N: usize> IntoIterator for ArrayVec<T, N> {
     type IntoIter = ArrayVecIntoIter<T, N>;
 
     fn into_iter(self) -> Self::IntoIter {
+        // SAFETY: Wrap in ManuallyDrop to prevent original drop from running.
+        // This transfers control to the iterator's Drop.
+        let this = ManuallyDrop::new(self);
+        // SAFETY: Read fields out (valid as long as we don't access `this` after).
+        // ptr::read performs bitwise copy without calling Drop on read memory
+        let values = unsafe { ptr::read(&this.values) };
+        let len = unsafe { ptr::read(&this.len) };
+
         ArrayVecIntoIter {
-            values: self.values,
-            len: self.len,
+            values,
+            len,
             index: 0,
         }
     }
 }
-
-*/
 
 // Implement IntoIterator for fundamental types of ArrayVec: & and &mut.
 // By reference: yields &T

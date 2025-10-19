@@ -12,6 +12,7 @@ const CAP: usize = 5;
 
 fn main() {
     {
+        // A:
         let mut arr_vec = ArrayVec::<i32, CAP>::new();
         std::println!("{:?}", arr_vec);
 
@@ -51,6 +52,7 @@ fn main() {
     }
 
     {
+        // B:
         // Iterating over ArrayVec through fundamental types: & and &mut
 
         // Simple iteration
@@ -84,5 +86,42 @@ fn main() {
         // for i in arr_vec {
         //     unreachable!();
         // }
+    }
+
+    {
+        // C:
+        // Here, I've implemented the ability to iterate over owned ArrayVec.
+        // Iterating over owned values of ArrayVec by calling `into_iter`
+        let mut arr_vec = ArrayVec::<u8, CAP>::new();
+        let mut count;
+        for i in 0..(CAP - 1) {
+            count = 1 + i as u8;
+            arr_vec.try_push(count).unwrap();
+        }
+        let mut arr_iter = arr_vec.into_iter(); // move `arr_vec`.
+        // std::println!("{:?}", arr_vec); // should return move error
+        // Above code confirms `impl IntoIterator for ArrayVec` safety invariants.
+
+        std::println!("---\n{:?}", arr_iter); /* View created ArrayVecIntoIter.
+        See `len` and `index` fields. */
+
+        let mut arr_vec2: ArrayVec<Option<u8>, CAP> = ArrayVec::new();
+        loop {
+            /* Loop through calls to `next()` to iterate through
+            ArrayVecIntoIter. */
+            match arr_iter.next() {
+                Some(mut value) => {
+                    value += 10;
+                    arr_vec2.try_push(Some(value)).unwrap();
+                }
+                None => {
+                    arr_vec2.try_push(None).unwrap();
+                    break;
+                }
+            }
+        }
+        std::println!("{:?}", arr_iter); /* Review `len` and `index` fields.
+        Notice index incr caused by calling `next()` on ArrayVecIntoIter. */
+        std::println!("{:?}", arr_vec2.as_slice());
     }
 }
