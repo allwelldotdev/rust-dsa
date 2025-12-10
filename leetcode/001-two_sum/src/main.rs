@@ -1,8 +1,8 @@
 //! # Two Sum algorithm
 //!
-//! Given an array of integers `nums` and an integer `target`, return indices of the
-//! two numbers such that they add up to `target`. Assume exactly one solution, return
-//! in any order.
+//! Given an array of integers `nums` and an integer `target`, return indices of
+//! two numbers from `nums` that add up to `target`.
+//! Assume exactly one solution, return in any order.
 
 use two_sum::Solution;
 
